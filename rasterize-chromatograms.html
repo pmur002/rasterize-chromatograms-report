@@ -1,0 +1,651 @@
+<html>
+  <head>
+<style type="text/css">
+.knitr .inline {
+  background-color: #f7f7f7;
+  border:solid 1px #B0B0B0;
+}
+.error {
+	font-weight: bold;
+	color: #FF0000;
+}
+.warning {
+	font-weight: bold;
+}
+.message {
+	font-style: italic;
+}
+.source, .output, .warning, .error, .message {
+	padding: 0 1em;
+  border:solid 1px #F7F7F7;
+}
+.source {
+  background-color: #f5f5f5;
+}
+.rimage .left {
+  text-align: left;
+}
+.rimage .right {
+  text-align: right;
+}
+.rimage .center {
+  text-align: center;
+}
+.hl.num {
+  color: #AF0F91;
+}
+.hl.str {
+  color: #317ECC;
+}
+.hl.com {
+  color: #AD95AF;
+  font-style: italic;
+}
+.hl.opt {
+  color: #000000;
+}
+.hl.std {
+  color: #585858;
+}
+.hl.kwa {
+  color: #295F94;
+  font-weight: bold;
+}
+.hl.kwb {
+  color: #B05A65;
+}
+.hl.kwc {
+  color: #55aa55;
+}
+.hl.kwd {
+  color: #BC5A65;
+  font-weight: bold;
+}
+</style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style type="text/css">
+    @media print {
+      body { }
+      p.img { text-align: center; page-break-inside: avoid }
+      img.CC { display: inline }
+    }
+    @media screen {
+      body { max-width: 800px; margin: auto }
+      p.img { text-align: center }
+      img.CC { display: inline }
+    }
+    p.date {
+      font-size: smaller;
+      margin: 0;
+    }
+    p.versionHistory {
+      color: gray
+    }
+    p.versionHistory a {
+      color: gray
+    }
+    p.ref {
+      text-indent: -2em;
+      padding-left: 2em;
+    }
+  </style>
+  </head>
+  <body>
+    <h1>Rasterizing Chromatograms</h1>
+    <p>
+      <span style="font-style: italic">by Paul Murrell</span>
+      <a href="http://orcid.org">
+        <img alt="" src="https://www.stat.auckland.ac.nz/~paul/ORCID/ORCiD.png" style="width: 16px; height: 16px; vertical-align: middle">
+      </a>
+      <span style="font-family: mono; font-size: small">
+        <a href="http://orcid.org/0000-0002-3224-8858">http://orcid.org/0000-0002-3224-8858</a>
+      </span>
+    </p>
+    <p class="date">
+    Version 1:
+Tuesday 12 June 2018
+  </p>
+
+
+    <hr>
+    <p><a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img class="CC" alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png"></a><br><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#" property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+    <hr>
+    <p>
+    This report describes an application of the 'rasterize' package for R.
+    We rasterize (just) the line segments
+    of two chromatograms in order to render one
+    semi-transparently over the other.
+    This also demonstrates, more generally,
+    the value of having access to advanced
+    graphical techniques within statistical graphics software.
+  </p>
+    <div>
+      <h2>Table of Contents:</h2>
+      <ul style="list-style: none">
+        <li>
+          <a href="#intro">1. The problem</a>
+        </li>
+        <li>
+          <a href="#prep">2. Preparation: converting to 'grid'</a>
+        </li>
+        <li>
+          <a href="#rasterize">3. Rasterizing the chromatographs</a>
+        </li>
+        <li>
+          <a href="#finish">4. Adding semi-transparency</a>
+        </li>
+        <li>
+          <a href="#gridsvg">5. Alternative solutions</a>
+        </li>
+        <li>
+          <a href="#discussion">6. Discussion</a>
+        </li>
+        <li>
+          <a href="#summary">7. Summary</a>
+        </li>
+        <li>
+          <a href="#requirements">8. Technical requirements</a>
+        </li>
+        <li>
+          <a href="#Resources">9. Resources</a>
+        </li>
+        <li>
+          <a href="#references">10. References</a>
+        </li>
+      </ul>
+    </div>
+    <h2>
+      <a name="intro">1. The problem</a>
+    </h2>
+    <p>
+    A <a href="https://stat.ethz.ch/pipermail/r-help/2018-May/454714.html">question on R-help</a>
+    (Ed Siefker, "How to alpha entire plot?", 2018-05-31) described a 
+    situation where two chromatograms, each consisting of lots
+    of vertical lines, are to be overlaid.
+    Because there is a lot of overlap, one chromatogram obscures
+    the other.  The following code and plot shows a representation 
+    of the problem.
+  </p>
+<div class="chunk" id="chromatograms"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">EU</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">data.frame</span><span class="hl std">(EuStockMarkets)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, CAC,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;blue&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">par</span><span class="hl std">(</span><span class="hl kwc">new</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, FTSE,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;red&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+</pre></div>
+</div><div class="rimage default"><img src="figure/chromatograms-1.png" title="plot of chunk chromatograms" alt="plot of chunk chromatograms" class="plot" /></div></div>
+    <p>
+    A simple solution to this sort of overlap problem is to use semi-transparent
+    colours to draw the vertical lines.  The problem in this case
+    is that the lines in a single chromatogram overlap with each other,
+    so making each line semi-transparent still creates an opaque
+    region if there are several lines from the same chromatogram overlapping 
+    each other.  The following code and plot demonstrates this problem.
+  </p>
+<div class="chunk" id="unnamed-chunk-3"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">col1</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">adjustcolor</span><span class="hl std">(</span><span class="hl str">&quot;blue&quot;</span><span class="hl std">,</span> <span class="hl kwc">alpha</span><span class="hl std">=</span><span class="hl num">.3</span><span class="hl std">)</span>
+<span class="hl std">col2</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">adjustcolor</span><span class="hl std">(</span><span class="hl str">&quot;red&quot;</span><span class="hl std">,</span> <span class="hl kwc">alpha</span><span class="hl std">=</span><span class="hl num">.3</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, CAC,</span> <span class="hl kwc">col</span><span class="hl std">=col1,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">par</span><span class="hl std">(</span><span class="hl kwc">new</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, FTSE,</span> <span class="hl kwc">col</span><span class="hl std">=col2,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+</pre></div>
+</div><div class="rimage default"><img src="figure/unnamed-chunk-3-1.png" title="plot of chunk unnamed-chunk-3" alt="plot of chunk unnamed-chunk-3" class="plot" /></div></div>
+    <p>
+    The R-help question asked whether it is possible to draw the
+    chromatogram lines with opaque colours and then make the entire
+    set of lines semi-transparent (and then overlay the result).  This
+    report looks at implementing that solution using the 'rasterize'
+    package (<a href="murrell-rasterize"></a>, <a href="#pkg:rasterize">Murrell, 2018a</a>)
+    and the 'gridGraphics' package (<a href="#pkg:gridGraphics">Murrell and Wen, 2018</a>) 
+    in R (<a href="#R">R Core Team, 2018</a>).
+  </p>
+    <p>
+    In brief, we will 
+    <a href="#prep">Preparation: converting to 'grid'</a> with
+    'gridGraphics', 
+    <a href="#rasterize">Rasterizing the chromatographs</a>
+    with 'rasterize', and then
+    <a href="#finish">Adding semi-transparency</a>
+    of the rasterized line segments.
+  </p>
+    <h2>
+      <a name="prep">2. Preparation: converting to 'grid'</a>
+    </h2>
+    <p>
+    We start with the original plot, with its opaque colours so
+    that the red line segments almost completely obscure the 
+    blue line segments.
+  </p>
+<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">EU</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">data.frame</span><span class="hl std">(EuStockMarkets)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, CAC,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;blue&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">par</span><span class="hl std">(</span><span class="hl kwc">new</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, FTSE,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;red&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+</pre></div>
+</div><div class="rimage default"><img src="figure/unnamed-chunk-4-1.png" title="plot of chunk unnamed-chunk-4" alt="plot of chunk unnamed-chunk-4" class="plot" /></div></div>
+    <p>
+    The 'rasterize' package works with 'grid' graphics output,
+    so the first step is to convert the base graphics plot to a 
+    'grid' one.  This is achieved using <code>grid.echo</code> 
+    from the 'gridGraphics' package, as shown below (the resulting
+    plot is visually identical to the original).
+  </p>
+<div class="chunk" id="gridecho"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(gridGraphics)</span>
+<span class="hl kwd">grid.echo</span><span class="hl std">()</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-5"><div class="rimage default"><img src="figure/unnamed-chunk-5-1.png" title="plot of chunk unnamed-chunk-5" alt="plot of chunk unnamed-chunk-5" class="plot" /></div></div>
+    <h2>
+      <a name="rasterize">3. Rasterizing the chromatographs</a>
+    </h2>
+    <p>
+    The next step is to rasterize the two sets of line segments.
+    We can do this with the <code>grid.rasterize</code> function
+    from the 'rasterize' package.
+  </p>
+    <p>
+    The first argument to this function is the name of a 'grid'
+    grob that we want to rasterize, so we need to find out the
+    names of the 'grid' grobs that represent the line segments.  
+    We also need to
+    know the viewport that the line segments were drawn within
+    because the rasterization has to occur within that viewport.
+    The following code uses that <code>grid.ls</code> function
+    to get us the information we need.
+  </p>
+<div class="chunk" id="gridls"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.ls</span><span class="hl std">(</span><span class="hl kwc">viewports</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl kwc">print</span><span class="hl std">=grobPathListing)</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-6"><div class="rcode"><div class="output"><pre class="knitr r">  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1-clip::graphics-window-1-1 | graphics-plot-1-spike-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-bottom-axis-line-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-bottom-axis-ticks-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-bottom-axis-labels-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-left-axis-line-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-left-axis-ticks-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1::graphics-window-1-1      | graphics-plot-1-left-axis-labels-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1::graphics-plot-1                           | graphics-plot-1-box-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1-clip::graphics-plot-1                      | graphics-plot-1-xlab-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-1-clip::graphics-plot-1                      | graphics-plot-1-ylab-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2-clip::graphics-window-2-1 | graphics-plot-2-spike-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-bottom-axis-line-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-bottom-axis-ticks-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-bottom-axis-labels-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-left-axis-line-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-left-axis-ticks-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2::graphics-window-2-1      | graphics-plot-2-left-axis-labels-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2::graphics-plot-2                           | graphics-plot-2-box-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2-clip::graphics-plot-2                      | graphics-plot-2-xlab-1
+  ROOT::graphics-root::graphics-inner::graphics-figure-2-clip::graphics-plot-2                      | graphics-plot-2-ylab-1
+</pre></div>
+</div></div>
+
+    <p>
+    The line segments are represented by grobs called
+    <code>graphics-plot-1-spike-1</code> and
+    <code>graphics-plot-2-spike-1</code>, which are drawn
+    within viewports called 
+    <code>graphics-window-1-1</code> and
+    <code>graphics-window-2-1</code>, respectively.
+  </p>
+<div class="chunk" id="getgrob"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-8"><div class="rcode"><div class="output"><pre class="knitr r">  segments[graphics-plot-1-spike-1]
+</pre></div>
+</div></div>
+
+    <p>
+    The following code navigates to the relevant viewports
+    and rasterizes the two sets of line segments.
+  </p>
+<div class="chunk" id="rasterize"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(rasterize)</span>
+<span class="hl kwd">downViewport</span><span class="hl std">(</span><span class="hl str">&quot;graphics-window-1-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">grid.rasterize</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">upViewport</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">)</span>
+<span class="hl kwd">downViewport</span><span class="hl std">(</span><span class="hl str">&quot;graphics-window-2-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">grid.rasterize</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">upViewport</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-10"><div class="rimage default"><img src="figure/unnamed-chunk-10-1.png" title="plot of chunk unnamed-chunk-10" alt="plot of chunk unnamed-chunk-10" class="plot" /></div></div>
+    <p>
+    The "spike" grobs are now raster grobs rather than line segment grobs.
+  </p>
+<div class="chunk" id="unnamed-chunk-11"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-12"><div class="rcode"><div class="output"><pre class="knitr r">  rastergrob[graphics-plot-1-spike-1]
+</pre></div>
+</div></div>
+
+    <h2>
+      <a name="finish">4. Adding semi-transparency</a>
+    </h2>
+    <p>
+    The advantage of rasterizing the line segments is that we now have
+    a collection of (non-overlapping) pixels, rather than lots of 
+    overlapping line segments.  This means that we can modify the 
+    semi-transparency of the pixels and get a consistent 
+    semi-transparency across the entire chromatogram.
+  </p>
+    <p>
+    The following code extracts the matrix of pixels for each raster grob,
+    adjusts the semi-transparency ("alpha channel") of each set of pixels,
+    and edits each raster grob to replace the opaque pixels with 
+    the semi-transparent pixels. 
+  </p>
+<div class="chunk" id="semitrans"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">raster</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">as.matrix</span><span class="hl std">(</span><span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span><span class="hl opt">$</span><span class="hl std">raster)</span>
+<span class="hl std">newRaster</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">adjustcolor</span><span class="hl std">(raster,</span> <span class="hl kwc">alpha</span><span class="hl std">=</span><span class="hl num">.3</span><span class="hl std">)</span>
+<span class="hl kwd">dim</span><span class="hl std">(newRaster)</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">dim</span><span class="hl std">(raster)</span>
+<span class="hl kwd">grid.edit</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">,</span> <span class="hl kwc">raster</span><span class="hl std">=</span><span class="hl kwd">as.raster</span><span class="hl std">(newRaster))</span>
+<span class="hl std">raster</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">as.matrix</span><span class="hl std">(</span><span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">)</span><span class="hl opt">$</span><span class="hl std">raster)</span>
+<span class="hl std">newRaster</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">adjustcolor</span><span class="hl std">(raster,</span> <span class="hl kwc">alpha</span><span class="hl std">=</span><span class="hl num">.3</span><span class="hl std">)</span>
+<span class="hl kwd">dim</span><span class="hl std">(newRaster)</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">dim</span><span class="hl std">(raster)</span>
+<span class="hl kwd">grid.edit</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">,</span> <span class="hl kwc">raster</span><span class="hl std">=</span><span class="hl kwd">as.raster</span><span class="hl std">(newRaster))</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-14"><div class="rimage default"><img src="figure/unnamed-chunk-14-1.png" title="plot of chunk unnamed-chunk-14" alt="plot of chunk unnamed-chunk-14" class="plot" /></div></div>
+    <p>
+    As a final tweak, we can remove all of the decorations (axes and labels)
+    from the second plot and modify the y-axis label.
+  </p>
+<div class="chunk" id="tidy"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.remove</span><span class="hl std">(</span><span class="hl str">&quot;.+-plot-2-[^s].+&quot;</span><span class="hl std">,</span> <span class="hl kwc">grep</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl kwc">global</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">grid.edit</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-ylab-1&quot;</span><span class="hl std">,</span> <span class="hl kwc">label</span><span class="hl std">=</span><span class="hl str">&quot;CAC / FTSE&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-15"><div class="rimage default"><img src="figure/unnamed-chunk-15-1.png" title="plot of chunk unnamed-chunk-15" alt="plot of chunk unnamed-chunk-15" class="plot" /></div></div>
+    <h2>
+      <a name="gridsvg">5. Alternative solutions</a>
+    </h2>
+    <p>
+    The key idea in the solution outlined above is that we convert
+    just some pieces of an image into raster components and then
+    apply a modification just to those components.  In effect, we
+    draw the sets of line segments as separate images, but ones
+    that are nicely aligned with the overall plot, and apply a
+    modification to the separate images.
+  </p>
+    <p>
+    Another way that we could achieve the same result is to 
+    make use of filters from the 'gridSVG' package (<a href="#pkg:gridSVG">Murrell and Potter, 2017</a>).
+    Again, the main idea is that we take a specific component
+    of the plot and apply a modification just to that component.
+  </p>
+    <p>
+    The following code defines a "component transfer" filter
+    with a transfer function that multiplies the alpha channel
+    of its target by 0.3 (to make it semi-transparent).
+  </p>
+<div class="chunk" id="unnamed-chunk-16"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(gridSVG)</span>
+<span class="hl std">reduceAlpha</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">transferFunction</span><span class="hl std">(</span><span class="hl str">&quot;linear&quot;</span><span class="hl std">,</span> <span class="hl kwc">slope</span><span class="hl std">=</span><span class="hl num">0.3</span><span class="hl std">)</span>
+<span class="hl std">filter</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">feComponentTransfer</span><span class="hl std">(</span><span class="hl kwc">transfers</span><span class="hl std">=</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">A</span><span class="hl std">=reduceAlpha))</span>
+</pre></div>
+</div></div>
+    <p>
+    The next code draws the initial chromatograms and converts to 'grid'
+    as before.
+  </p>
+<div class="chunk" id="unnamed-chunk-17"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">EU</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">data.frame</span><span class="hl std">(EuStockMarkets)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, CAC,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;blue&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">par</span><span class="hl std">(</span><span class="hl kwc">new</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, FTSE,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;red&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">library</span><span class="hl std">(gridGraphics)</span>
+<span class="hl kwd">grid.echo</span><span class="hl std">()</span>
+</pre></div>
+</div></div>
+    <p>
+    Now we apply the 'gridSVG' filters that we defined above to each of the
+    sets of line segments (<em>instead</em> of rasterizing the line segments), 
+    then we export the result
+    as an SVG file (which is shown below the code).
+  </p>
+<div class="chunk" id="filter"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.filter</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">,</span>
+            <span class="hl kwd">filterEffect</span><span class="hl std">(filter))</span>
+<span class="hl kwd">grid.filter</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">,</span>
+            <span class="hl kwd">filterEffect</span><span class="hl std">(filter))</span>
+<span class="hl kwd">grid.export</span><span class="hl std">(</span><span class="hl str">&quot;chromatograms.svg&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+
+    <p>
+      <img src="chromatograms.svg">
+    </p>
+    <p>
+    One disadvantage of this approach is that it is quite slow to generate the
+    file and the result is a much heftier
+    file:  about 1MB compared to approximately 20KB for all of the 
+    other PNG images in this report.  This is because the image contains
+    several thousand line segments (with a filter applied to them)
+    rather than two raster images.
+  </p>
+    <p>
+    Another variation is to use the 'magick' package (<a href="#pkg:magick">Ooms, 2018</a>)
+    to perform the modifications of the raster grobs once we have
+    rasterized the chromatograms.  The advantage of this is that 'magick'
+    offers many different raster manipulations.  
+  </p>
+    <p>
+    For example, if we start the initial set up as before and 
+    rasterize the sets of line segments ...
+  </p>
+<div class="chunk" id="unnamed-chunk-19"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">EU</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">data.frame</span><span class="hl std">(EuStockMarkets)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, CAC,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;blue&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">par</span><span class="hl std">(</span><span class="hl kwc">new</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl kwd">with</span><span class="hl std">(EU,</span> <span class="hl kwd">plot</span><span class="hl std">(DAX, FTSE,</span> <span class="hl kwc">col</span><span class="hl std">=</span><span class="hl str">&quot;red&quot;</span><span class="hl std">,</span> <span class="hl kwc">type</span><span class="hl std">=</span><span class="hl str">&quot;h&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylim</span><span class="hl std">=</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">6000</span><span class="hl std">)))</span>
+<span class="hl kwd">library</span><span class="hl std">(gridGraphics)</span>
+<span class="hl kwd">grid.echo</span><span class="hl std">()</span>
+<span class="hl kwd">library</span><span class="hl std">(rasterize)</span>
+<span class="hl kwd">downViewport</span><span class="hl std">(</span><span class="hl str">&quot;graphics-window-1-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">grid.rasterize</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">upViewport</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">)</span>
+<span class="hl kwd">downViewport</span><span class="hl std">(</span><span class="hl str">&quot;graphics-window-2-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">grid.rasterize</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">upViewport</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+    <p>  
+    ... the following code extracts the pixels from each raster grob and
+    converts to 'magick' image objects.
+  </p>
+<div class="chunk" id="images"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(magick)</span>
+<span class="hl std">raster1</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">)</span><span class="hl opt">$</span><span class="hl std">raster</span>
+<span class="hl std">image1</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">image_read</span><span class="hl std">(raster1)</span>
+<span class="hl std">raster2</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">grid.get</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">)</span><span class="hl opt">$</span><span class="hl std">raster</span>
+<span class="hl std">image2</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">image_read</span><span class="hl std">(raster2)</span>
+</pre></div>
+</div></div>
+    <p>
+    We can now apply all sorts of manipulations to those 'magick' images.
+    The following code composites the two images with a "blend" operator
+    so that the result is a 50/50 mix of the two images.
+  </p>
+<div class="chunk" id="compose"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">image3</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">image_composite</span><span class="hl std">(image1, image2,</span> <span class="hl kwc">operator</span><span class="hl std">=</span><span class="hl str">&quot;blend&quot;</span><span class="hl std">,</span> <span class="hl kwc">compose_args</span><span class="hl std">=</span><span class="hl str">&quot;50&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+    <p>
+    As a final step, we can remove one of the original raster grobs
+    and replace the pixels in the other raster grob with the composited
+    'magick' image.
+  </p>
+<div class="chunk" id="remove"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">grid.remove</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-2-spike-1&quot;</span><span class="hl std">)</span>
+<span class="hl kwd">grid.edit</span><span class="hl std">(</span><span class="hl str">&quot;graphics-plot-1-spike-1&quot;</span><span class="hl std">,</span> <span class="hl kwc">raster</span><span class="hl std">=</span><span class="hl kwd">as.raster</span><span class="hl std">(image3))</span>
+</pre></div>
+</div></div>
+<div class="chunk" id="unnamed-chunk-20"><div class="rimage default"><img src="figure/unnamed-chunk-20-1.png" title="plot of chunk unnamed-chunk-20" alt="plot of chunk unnamed-chunk-20" class="plot" /></div></div>
+    <p>
+    Although it does not answer the original question directly,
+    Boris Stiepe 
+    <a href="https://stat.ethz.ch/pipermail/r-help/2018-June/454716.html">proposed a completely different solution</a> 
+    based on discretizing the x-values of the
+    chromatograms and then interleaving them.  This
+    solution has the nice property that
+    the density of the chromatograms is retained.
+  </p>
+    <h2>
+      <a name="discussion">6. Discussion</a>
+    </h2>
+    <p>
+    The 'rasterize' package was originally created to solve the
+    problem of large file sizes (and slow rendering) when a vector
+    format plot contains a large number of plotting symbols (for example).
+    This report demonstrates that the ability to generate rasterized
+    versions of plot components is also useful for performing 
+    raster operations on just specific components of a plot.
+  </p>
+    <p>
+    More generally, the example in this report provides a justification
+    for providing access to more sophisticated graphical operations
+    within statistical graphics software, through packages like 
+    'rasterize', 'magick', and 'gridSVG'.
+    Having access to more advanced graphical
+    tools means that we can start thinking
+    of doing different things and solving different problems.
+  </p>
+    <h2>
+      <a name="summary">7. Summary</a>
+    </h2>
+    <p>
+    Rasterizing specific components of a plot with the 'rasterize'
+    package can be useful for applying raster transformations to the
+    rasterized components.  In this report, we used this approach
+    to rasterize two sets of line segments and then modified the
+    transparency of the resulting raster images so that they 
+    could be overlaid.
+    The 'gridSVG' package and the
+    'magick' package can be used instead of or in combination with
+    'rasterize' to broaden the range of transformations that are possible.
+  </p>
+    <h2>
+      <a name="requirements">8. Technical requirements</a>
+    </h2>
+    <p>
+    The examples and discussion in this document relate to <a href="https://github.com/pmur002/rasterize/releases/tag/v0.1">version
+    0.1</a> of the 'rasterize' package.
+  </p>
+    <p>
+    This report was generated within a Docker container
+    (see <a href="#Resources">Resources</a> section below).
+  </p>
+    <h2>
+      <a name="Resources">9. Resources</a>
+    </h2>
+    <ul>
+      <li>
+      The <a href="rasterize-chromatograms.cml">raw source file</a> for this
+      report, a <a href="rasterize-chromatograms.xml">valid XML</a>
+      transformation of the source file, a <a href="rasterize-chromatograms.Rhtml">'knitr' document</a> generated from
+      the XML file, 
+      two <a href="toc.R">R</a> <a href="bib.R">files</a> and
+      the <a href="rasterize-chromatograms.bib">bibtex file</a>
+      that are used to generate the table of contents and reference sections,
+      two <a href="common.xsl">XSL</a> <a href="knitr.xsl">files</a> and an 
+      <a href="knit.R">R file</a> that are used to transform the XML to
+      the 'knitr' document, and a <a href="Makefile">Makefile</a> that
+      contains code for the other transformations and coordinates
+      everything.  
+      These materials are also available
+      on <a href="https://github.com/pmur002/rasterize-chromatograms-report/releases/tag/v1">github</a>.
+    </li>
+      <li>
+      This report was generated within a 
+      <a href="https://www.docker.com/">Docker</a> container.
+      The Docker command to build the report is included in the Makefile above.
+      The Docker image for the container is available from
+      <a href="https://hub.docker.com/r/pmur002/rasterize-chromatograms/">Docker Hub</a>;
+      alternatively, the image can be rebuilt from its 
+      <a href="Dockerfile">Dockerfile</a>.
+    </li>
+    </ul>
+    <h2>How to cite this document</h2>
+    <p>
+    Murrell, P. (2018). "Rasterizing Chromatograms" 
+    Technical Report 2018-??, Department of Statistics, The University of Auckland. 
+    [ <a href="how-to-cite.bib">bib</a> ] 
+  </p>
+    <h2>
+      <a name="references">10. References</a>
+    </h2>
+    <dl>
+<dt>
+[<a name="pkg:rasterize">Murrell, 2018a</a>]
+</dt>
+<dd>
+Murrell, P. (2018a).
+ <em>rasterize: Rasterize Graphical Output</em>.
+ R package version 0.1.
+[ <a href="rasterize-chromatograms-bib_bib.html#pkg:rasterize">bib</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="murrell-rasterize">Murrell, 2018b</a>]
+</dt>
+<dd>
+Murrell, P. (2018b).
+ Selective raster graphics.
+ Technical Report 2018-05, Department of Statistics, The University of
+  Auckland.
+[ <a href="rasterize-chromatograms-bib_bib.html#murrell-rasterize">bib</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="pkg:gridSVG">Murrell and Potter, 2017</a>]
+</dt>
+<dd>
+Murrell, P. and Potter, S. (2017).
+ <em>gridSVG: Export 'grid' Graphics as SVG</em>.
+ R package version 1.6-0.
+[ <a href="rasterize-chromatograms-bib_bib.html#pkg:gridSVG">bib</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="pkg:gridGraphics">Murrell and Wen, 2018</a>]
+</dt>
+<dd>
+Murrell, P. and Wen, Z. (2018).
+ <em>gridGraphics: Redraw Base Graphics Using 'grid' Graphics</em>.
+ R package version 0.3-1.
+[ <a href="rasterize-chromatograms-bib_bib.html#pkg:gridGraphics">bib</a> | 
+<a href="https://github.com/pmur002/gridgraphics">http</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="pkg:magick">Ooms, 2018</a>]
+</dt>
+<dd>
+Ooms, J. (2018).
+ <em>magick: Advanced Graphics and Image-Processing in R</em>.
+ R package version 1.7.
+[ <a href="rasterize-chromatograms-bib_bib.html#pkg:magick">bib</a> | 
+<a href="https://CRAN.R-project.org/package=magick">http</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="R">R Core Team, 2018</a>]
+</dt>
+<dd>
+R Core Team (2018).
+ <em>R: A Language and Environment for Statistical Computing</em>.
+ R Foundation for Statistical Computing, Vienna, Austria.
+[ <a href="rasterize-chromatograms-bib_bib.html#R">bib</a> | 
+<a href="https://www.R-project.org/">http</a> ]
+
+</dd>
+</dl>
+    <hr>
+    <p><a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img class="CC" alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png"></a><br><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#" property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+  </body>
+</html>

@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="utf-8"?>
+<html>
+<head>
+  <style type="text/css">
+    @media print {
+      body { }
+      p.img { text-align: center; page-break-inside: avoid }
+      img.CC { display: inline }
+    }
+    @media screen {
+      body { max-width: 800px; margin: auto }
+      p.img { text-align: center }
+      img.CC { display: inline }
+    }
+    p.date {
+      font-size: smaller;
+      margin: 0;
+    }
+    p.versionHistory {
+      color: gray
+    }
+    p.versionHistory a {
+      color: gray
+    }
+    p.ref {
+      text-indent: -2em;
+      padding-left: 2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rasterizing Chromatograms</h1>
+  <p>
+    <span style="font-style: italic">by Paul Murrell</span>
+    <a href="http://orcid.org"><img alt="" src="https://www.stat.auckland.ac.nz/~paul/ORCID/ORCiD.png" style="width: 16px; height: 16px; vertical-align: middle" /></a> <span style="font-family: mono; font-size: small"><a href="http://orcid.org/0000-0002-3224-8858">http://orcid.org/0000-0002-3224-8858</a></span>
+  </p>
+  <p class="date">
+    Version 1:
+    <rcode echo="FALSE" results="asis">
+cat(format(Sys.Date(), "%A %d %B %Y"))
+    </rcode>
+  </p>
+
+  <rcode id="init" echo="FALSE" message="FALSE" results="hide">
+opts_chunk$set(comment=" ", tidy=FALSE)
+options(width=100)
+## For wonky desktop set up
+options(bitmapType="cairo")
+  </rcode>
+  <rcode echo="FALSE">
+    library(grid)
+  </rcode>
+
+  <hr/>
+  <p>
+    <a rel="license"
+    href="http://creativecommons.org/licenses/by/4.0/"><img class="CC"
+    alt="Creative Commons License" style="border-width:0"
+    src="https://i.creativecommons.org/l/by/4.0/88x31.png"/></a><br/><span
+    xmlns:dct="http://purl.org/dc/terms/"
+    property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#"
+    property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license"
+    href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+  <hr/>
+  <p>
+    This report describes an application of the 'rasterize' package for R.
+    We rasterize (just) the line segments
+    of two chromatograms in order to render one
+    semi-transparently over the other.
+    This also demonstrates, more generally,
+    the value of having access to advanced
+    graphical techniques within statistical graphics software.
+  </p>
+
+  <toc/>
+
+  <h2><a name="intro">The problem</a></h2>
+  <p>
+    A <a href="https://stat.ethz.ch/pipermail/r-help/2018-May/454714.html">question on R-help</a>
+    (Ed Siefker, "How to alpha entire plot?", 2018-05-31) described a 
+    situation where two chromatograms, each consisting of lots
+    of vertical lines, are to be overlaid.
+    Because there is a lot of overlap, one chromatogram obscures
+    the other.  The following code and plot shows a representation 
+    of the problem;  these are not chromatograms, but they share
+    the essential graphical characteristics, i.e., lots of 
+    vertical line segments.
+  </p>
+  <rcode id="chromatograms">
+EU <- data.frame(EuStockMarkets)
+with(EU, plot(DAX, CAC, col="blue", type="h", ylim=c(0,6000)))
+par(new=TRUE)
+with(EU, plot(DAX, FTSE, col="red", type="h", ylim=c(0,6000)))
+  </rcode>
+  <p>
+    A simple solution to this sort of overlap problem is to use semi-transparent
+    colours to draw the vertical lines.  The problem in this case
+    is that the lines in a single chromatogram overlap with each other,
+    so making each line semi-transparent still creates an opaque
+    region if there are several lines from the same chromatogram overlapping 
+    each other.  The following code and plot demonstrates this problem.
+  </p>
+  <rcode>
+col1 <- adjustcolor("blue", alpha=.3)
+col2 <- adjustcolor("red", alpha=.3)
+with(EU, plot(DAX, CAC, col=col1, type="h", ylim=c(0,6000)))
+par(new=TRUE)
+with(EU, plot(DAX, FTSE, col=col2, type="h", ylim=c(0,6000)))
+  </rcode>
+  <p>
+    The R-help question asked whether it is possible to draw the
+    chromatogram lines with opaque colours and then make the entire
+    set of lines semi-transparent (and then overlay the result).  This
+    report looks at implementing that solution using the 'rasterize'
+    package (<a href="murrell-rasterize"/>, <a href="#pkg:rasterize"/>)
+    and the 'gridGraphics' package (<a href="#pkg:gridGraphics"/>) 
+    in R (<a href="#R"/>).
+  </p>
+  <p>
+    In brief, we will 
+    <a href="#prep">convert the plot to a 'grid' plot</a> with
+    'gridGraphics', 
+    <a href="#rasterize">rasterize the line segments</a>
+    with 'rasterize', and then
+    <a href="#finish">adjust the semi-transparency</a>
+    of the rasterized line segments.
+  </p>
+
+  <h2><a name="prep">Preparation: converting to 'grid'</a></h2>
+  <p>
+    We start with the original plot, with its opaque colours so
+    that the red line segments almost completely obscure the 
+    blue line segments.
+  </p>
+  <rcode>
+<<chromatograms>>
+  </rcode>
+  <p>
+    The 'rasterize' package works with 'grid' graphics output,
+    so the first step is to convert the base graphics plot to a 
+    'grid' one.  This is achieved using <code>grid.echo</code> 
+    from the 'gridGraphics' package, as shown below (the resulting
+    plot is visually identical to the original).
+  </p>
+  <rcode id="gridecho" eval="FALSE">
+library(gridGraphics)
+grid.echo()
+  </rcode>
+  <rcode echo="FALSE" fig.keep="last">
+<<chromatograms>>
+<<gridecho>>
+  </rcode>
+
+  <h2><a name="rasterize">Rasterizing the chromatographs</a></h2>
+  <p>
+    The next step is to rasterize the two sets of line segments.
+    We can do this with the <code>grid.rasterize</code> function
+    from the 'rasterize' package.
+  </p>
+  <p>
+    The first argument to this function is the name of a 'grid'
+    grob that we want to rasterize, so we need to find out the
+    names of the 'grid' grobs that represent the line segments.  
+    We also need to
+    know the viewport that the line segments were drawn within
+    because the rasterization has to occur within that viewport.
+    The following code uses that <code>grid.ls</code> function
+    to get us the information we need.
+  </p>
+  <rcode id="gridls" eval="FALSE">
+grid.ls(viewports=TRUE, print=grobPathListing)
+  </rcode>
+  <rcode echo="FALSE" fig.keep="none">
+pdf(NULL)
+dev.control("enable")
+<<chromatograms>>
+<<gridecho>>
+<<gridls>>
+  </rcode>
+  <rcode echo="FALSE" results="hide">
+dev.off()
+  </rcode>
+  <p>
+    The line segments are represented by grobs called
+    <code>graphics-plot-1-spike-1</code> and
+    <code>graphics-plot-2-spike-1</code>, which are drawn
+    within viewports called 
+    <code>graphics-window-1-1</code> and
+    <code>graphics-window-2-1</code>, respectively.
+  </p>
+  <rcode id="getgrob" eval="FALSE">
+grid.get("graphics-plot-1-spike-1")
+  </rcode>
+  <rcode echo="FALSE" fig.keep="none">
+pdf(NULL)
+dev.control("enable")
+<<chromatograms>>
+<<gridecho>>
+<<getgrob>>
+  </rcode>
+  <rcode echo="FALSE" results="hide">
+dev.off()
+  </rcode>
+  <p>
+    The following code navigates to the relevant viewports
+    and rasterizes the two sets of line segments.
+  </p>
+  <rcode id="rasterize" eval="FALSE">
+library(rasterize)
+downViewport("graphics-window-1-1")
+grid.rasterize("graphics-plot-1-spike-1")
+upViewport(0)
+downViewport("graphics-window-2-1")
+grid.rasterize("graphics-plot-2-spike-1")
+upViewport(0)
+  </rcode>
+  <rcode echo="FALSE" fig.keep="last">
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+  </rcode>
+  <p>
+    The "spike" grobs are now raster grobs rather than line segment grobs.
+  </p>
+  <rcode eval="FALSE">
+<<getgrob>>
+  </rcode>
+  <rcode echo="FALSE" fig.keep="none">
+pdf(NULL)
+dev.control("enable")
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+<<getgrob>>
+  </rcode>
+  <rcode echo="FALSE" results="hide">
+dev.off()
+  </rcode>
+
+  <h2><a name="finish">Adding semi-transparency</a></h2>
+  <p>
+    The advantage of rasterizing the line segments is that we now have
+    a collection of (non-overlapping) pixels, rather than lots of 
+    overlapping line segments.  This means that we can modify the 
+    semi-transparency of the pixels and get a consistent 
+    semi-transparency across the entire chromatogram.
+  </p>
+  <p>
+    The following code extracts the matrix of pixels for each raster grob,
+    adjusts the semi-transparency ("alpha channel") of each set of pixels,
+    and edits each raster grob to replace the opaque pixels with 
+    the semi-transparent pixels. 
+  </p>
+  <rcode id="semitrans" eval="FALSE">
+raster <- as.matrix(grid.get("graphics-plot-1-spike-1")$raster)
+newRaster <- adjustcolor(raster, alpha=.3)
+dim(newRaster) <- dim(raster)
+grid.edit("graphics-plot-1-spike-1", raster=as.raster(newRaster))
+raster <- as.matrix(grid.get("graphics-plot-2-spike-1")$raster)
+newRaster <- adjustcolor(raster, alpha=.3)
+dim(newRaster) <- dim(raster)
+grid.edit("graphics-plot-2-spike-1", raster=as.raster(newRaster))
+  </rcode>
+  <rcode echo="FALSE" fig.keep="last">
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+<<semitrans>>
+  </rcode>
+  <p>
+    As a final tweak, we can remove all of the decorations (axes and labels)
+    from the second plot and modify the y-axis label.
+  </p>
+  <rcode id="tidy" eval="FALSE">
+grid.remove(".+-plot-2-[^s].+", grep=TRUE, global=TRUE)
+grid.edit("graphics-plot-1-ylab-1", label="CAC / FTSE")
+  </rcode>
+  <rcode echo="FALSE" fig.keep="last">
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+<<semitrans>>
+<<tidy>>
+  </rcode>
+
+  <h2><a name="gridsvg">Alternative solutions</a></h2>
+  <p>
+    The key idea in the solution outlined above is that we convert
+    just some pieces of an image into raster components and then
+    apply a modification just to those components.  In effect, we
+    draw the sets of line segments as separate images, but ones
+    that are nicely aligned with the overall plot, and apply a
+    modification to the separate images.
+  </p>
+  <p>
+    Another way that we could achieve the same result is to 
+    make use of filters from the 'gridSVG' package (<a href="#pkg:gridSVG"/>).
+    Again, the main idea is that we take a specific component
+    of the plot and apply a modification just to that component.
+  </p>
+  <p>
+    The following code defines a "component transfer" filter
+    with a transfer function that multiplies the alpha channel
+    of its target by 0.3 (to make it semi-transparent).
+  </p>
+  <rcode message="FALSE">
+library(gridSVG)
+reduceAlpha <- transferFunction("linear", slope=0.3)
+filter <- feComponentTransfer(transfers=list(A=reduceAlpha))    
+  </rcode>
+  <p>
+    The next code draws the initial chromatograms and converts to 'grid'
+    as before.
+  </p>
+  <rcode eval="FALSE">
+<<chromatograms>>
+<<gridecho>>
+  </rcode>
+  <p>
+    Now we apply the 'gridSVG' filters that we defined above to each of the
+    sets of line segments (<em>instead</em> of rasterizing the line segments), 
+    then we export the result
+    as an SVG file (which is shown below the code).
+  </p>
+  <rcode id="filter" eval="FALSE">
+grid.filter("graphics-plot-1-spike-1",
+            filterEffect(filter))
+grid.filter("graphics-plot-2-spike-1",
+            filterEffect(filter))
+grid.export("chromatograms.svg")    
+  </rcode>
+  <rcode echo="FALSE" results="hide" message="FALSE" fig.keep="none">
+pdf(NULL)
+dev.control("enable")
+<<chromatograms>>
+<<gridecho>>
+<<filter>>
+dev.off()
+  </rcode>
+  <p>
+    <img src="chromatograms.svg"/>
+  </p>
+  <p>
+    One disadvantage of this approach is that it is quite slow to generate the
+    file and the result is a much heftier
+    file:  about 1MB compared to approximately 20KB for all of the 
+    other PNG images in this report.  This is because the image contains
+    several thousand line segments (with a filter applied to them)
+    rather than two raster images.
+  </p>
+  <p>
+    Another variation is to use the 'magick' package (<a href="#pkg:magick"/>)
+    to perform the modifications of the raster grobs once we have
+    rasterized the chromatograms.  The advantage of this is that 'magick'
+    offers many different raster manipulations.  
+  </p>
+  <p>
+    For example, if we start the initial set up as before and 
+    rasterize the sets of line segments ...
+  </p>
+  <rcode eval="FALSE">
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+  </rcode>
+  <p>  
+    ... the following code extracts the pixels from each raster grob and
+    converts to 'magick' image objects.
+  </p>
+  <rcode id="images" eval="FALSE">
+library(magick)
+raster1 <- grid.get("graphics-plot-1-spike-1")$raster
+image1 <- image_read(raster1)
+raster2 <- grid.get("graphics-plot-2-spike-1")$raster
+image2 <- image_read(raster2)    
+  </rcode>
+  <p>
+    We can now apply all sorts of manipulations to those 'magick' images.
+    The following code composites the two images with a "blend" operator
+    so that the result is a 50/50 mix of the two images.
+  </p>
+  <rcode id="compose" eval="FALSE">
+image3 <- image_composite(image1, image2, operator="blend", compose_args="50")  
+  </rcode>
+  <p>
+    As a final step, we can remove one of the original raster grobs
+    and replace the pixels in the other raster grob with the composited
+    'magick' image.
+  </p>
+  <rcode id="remove" eval="FALSE">
+grid.remove("graphics-plot-2-spike-1")
+grid.edit("graphics-plot-1-spike-1", raster=as.raster(image3))
+  </rcode>
+  <rcode echo="FALSE" message="FALSE" fig.keep="last">
+<<chromatograms>>
+<<gridecho>>
+<<rasterize>>
+<<images>>
+<<compose>>
+<<remove>>    
+  </rcode>
+  <p>
+    Although it does not answer the original question directly,
+    Boris Stiepe 
+    <a href="https://stat.ethz.ch/pipermail/r-help/2018-June/454716.html">proposed a completely different solution</a> 
+    based on discretizing the x-values of the
+    chromatograms and then interleaving them.  This
+    solution has the nice property that
+    the density of the chromatograms is retained.
+  </p>
+  
+  <h2><a name="discussion">Discussion</a></h2>
+  <p>
+    The 'rasterize' package was originally created to solve the
+    problem of large file sizes (and slow rendering) when a vector
+    format plot contains a large number of plotting symbols (for example).
+    This report demonstrates that the ability to generate rasterized
+    versions of plot components is also useful for performing 
+    raster operations on just specific components of a plot.
+  </p>
+  <p>
+    More generally, the example in this report provides a justification
+    for providing access to more sophisticated graphical operations
+    within statistical graphics software, through packages like 
+    'rasterize', 'magick', and 'gridSVG'.
+    Having access to more advanced graphical
+    tools means that we can start thinking
+    of doing different things and solving different problems.
+  </p>
+
+  <h2><a name="summary">Summary</a></h2>
+  <p>
+    Rasterizing specific components of a plot with the 'rasterize'
+    package can be useful for applying raster transformations to the
+    rasterized components.  In this report, we used this approach
+    to rasterize two sets of line segments and then modified the
+    transparency of the resulting raster images so that they 
+    could be overlaid.
+    The 'gridSVG' package and the
+    'magick' package can be used instead of or in combination with
+    'rasterize' to broaden the range of transformations that are possible.
+  </p>
+
+  <h2><a name="requirements">Technical requirements</a></h2>
+  <p>
+    The examples and discussion in this document relate to <a
+    href="https://github.com/pmur002/rasterize/releases/tag/v0.1">version
+    0.1</a> of the 'rasterize' package.
+  </p>
+  <p>
+    This report was generated within a Docker container
+    (see <a href="#Resources">Resources</a> section below).
+  </p>
+
+  <h2><a name="Resources">Resources</a></h2>
+  <ul>
+    <li>
+      The <a href="rasterize-chromatograms.cml">raw source file</a> for this
+      report, a <a href="rasterize-chromatograms.xml">valid XML</a>
+      transformation of the source file, a <a
+      href="rasterize-chromatograms.Rhtml">'knitr' document</a> generated from
+      the XML file, 
+      two <a href="toc.R">R</a> <a href="bib.R">files</a> and
+      the <a href="rasterize-chromatograms.bib">bibtex file</a>
+      that are used to generate the table of contents and reference sections,
+      two <a href="common.xsl">XSL</a> <a
+      href="knitr.xsl">files</a> and an 
+      <a href="knit.R">R file</a> that are used to transform the XML to
+      the 'knitr' document, and a <a href="Makefile">Makefile</a> that
+      contains code for the other transformations and coordinates
+      everything.  
+      These materials are also available
+      on <a href="https://github.com/pmur002/rasterize-chromatograms-report/releases/tag/v1">github</a>.
+    </li>
+    <li>
+      This report was generated within a 
+      <a href="https://www.docker.com/">Docker</a> container.
+      The Docker command to build the report is included in the Makefile above.
+      The Docker image for the container is available from
+      <a href="https://hub.docker.com/r/pmur002/rasterize-chromatograms/">Docker Hub</a>;
+      alternatively, the image can be rebuilt from its 
+      <a href="Dockerfile">Dockerfile</a>.
+    </li>
+  </ul>
+
+  <h2>How to cite this document</h2>
+  <p>
+    Murrell, P. (2018). "Rasterizing Chromatograms" 
+    Technical Report 2018-??, Department of Statistics, The University of Auckland. 
+    [ <a href="how-to-cite.bib">bib</a> ] 
+  </p>
+
+  <h2><a name="references">References</a></h2>
+  <ul style="list-style-type: none">
+    <li>
+      <a name="R"/>
+    </li>
+    <li>
+      <a name="pkg:rasterize"/>
+    </li>
+    <li>
+      <a name="pkg:gridGraphics"/>
+    </li>
+    <li>
+      <a name="pkg:magick"/>
+    </li>
+    <li>
+      <a name="pkg:gridSVG"/>
+    </li>
+    <li>
+      <a name="murrell-rasterize"/>
+    </li>
+  </ul>
+
+  <hr/>
+  <p>
+    <a rel="license"
+    href="http://creativecommons.org/licenses/by/4.0/"><img class="CC"
+    alt="Creative Commons License" style="border-width:0"
+    src="https://i.creativecommons.org/l/by/4.0/88x31.png"/></a><br/><span
+    xmlns:dct="http://purl.org/dc/terms/"
+    property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#"
+    property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license"
+    href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+
+</body>
+</html>
