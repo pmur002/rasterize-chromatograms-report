@@ -493,7 +493,7 @@ grid.edit("graphics-plot-1-spike-1", raster=as.raster(image3))
   <h2>How to cite this document</h2>
   <p>
     Murrell, P. (2018). "Rasterizing Chromatograms" 
-    Technical Report 2018-??, Department of Statistics, The University of Auckland. 
+    Technical Report 2018-06, Department of Statistics, The University of Auckland. 
     [ <a href="how-to-cite.bib">bib</a> ] 
   </p>
 
