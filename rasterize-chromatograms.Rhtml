@@ -115,7 +115,9 @@ options(bitmapType="cairo")
     of vertical lines, are to be overlaid.
     Because there is a lot of overlap, one chromatogram obscures
     the other.  The following code and plot shows a representation 
-    of the problem.
+    of the problem;  these are not chromatograms, but they share
+    the essential graphical characteristics, i.e., lots of 
+    vertical line segments.
   </p>
 <!--begin.rcode chromatograms
 EU <- data.frame(EuStockMarkets)
@@ -126,7 +128,7 @@ with(EU, plot(DAX, FTSE, col="red", type="h", ylim=c(0,6000)))
     <p>
     A simple solution to this sort of overlap problem is to use semi-transparent
     colours to draw the vertical lines.  The problem in this case
-    is that the lines in a single chromatogram overlap with each other,
+    is that the lines within a single chromatogram overlap with each other,
     so making each line semi-transparent still creates an opaque
     region if there are several lines from the same chromatogram overlapping 
     each other.  The following code and plot demonstrates this problem.
@@ -143,18 +145,18 @@ with(EU, plot(DAX, FTSE, col=col2, type="h", ylim=c(0,6000)))
     chromatogram lines with opaque colours and then make the entire
     set of lines semi-transparent (and then overlay the result).  This
     report looks at implementing that solution using the 'rasterize'
-    package (<a href="murrell-rasterize"></a>, <a href="#pkg:rasterize">Murrell, 2018a</a>)
+    package (<a href="#murrell-rasterize">Murrell, 2018b</a>, <a href="#pkg:rasterize">Murrell, 2018a</a>)
     and the 'gridGraphics' package (<a href="#pkg:gridGraphics">Murrell and Wen, 2018</a>) 
     in R (<a href="#R">R Core Team, 2018</a>).
   </p>
     <p>
     In brief, we will 
-    <a href="#prep">Preparation: converting to 'grid'</a> with
-    'gridGraphics', 
-    <a href="#rasterize">Rasterizing the chromatographs</a>
-    with 'rasterize', and then
-    <a href="#finish">Adding semi-transparency</a>
-    of the rasterized line segments.
+    convert the plot to a 'grid' plot with
+    'gridGraphics' (<a href="#prep">Preparation: converting to 'grid'</a>), 
+    rasterize the line segments
+    with 'rasterize' (<a href="#rasterize">Rasterizing the chromatographs</a>), and then
+    adjust the semi-transparency
+    of the rasterized line segments (<a href="#finish">Adding semi-transparency</a>).
   </p>
     <h2>
       <a name="prep">2. Preparation: converting to 'grid'</a>
@@ -195,7 +197,7 @@ grid.echo()
     grob that we want to rasterize, so we need to find out the
     names of the 'grid' grobs that represent the line segments.  
     We also need to
-    know the viewport that the line segments were drawn within
+    know the viewports that the line segments were drawn within
     because the rasterization has to occur within that viewport.
     The following code uses that <code>grid.ls</code> function
     to get us the information we need.
@@ -237,6 +239,11 @@ dev.off()
     <p>
     The following code navigates to the relevant viewports
     and rasterizes the two sets of line segments.
+    Again, the resulting plot is very similar to the original plot,
+    though the line segments may look a little fuzzy depending
+    on the resolution we use for rasterization (and the size of the
+    plot when viewed).  We can adjust the rasterization resolution 
+    with the <code>res</code> argument to <code>grid.rasterize</code>.
   </p>
 <!--begin.rcode rasterize, eval=FALSE
 library(rasterize)
@@ -286,14 +293,14 @@ dev.off()
     the semi-transparent pixels. 
   </p>
 <!--begin.rcode semitrans, eval=FALSE
-raster <- as.matrix(grid.get("graphics-plot-1-spike-1")$raster)
-newRaster <- adjustcolor(raster, alpha=.3)
-dim(newRaster) <- dim(raster)
-grid.edit("graphics-plot-1-spike-1", raster=as.raster(newRaster))
-raster <- as.matrix(grid.get("graphics-plot-2-spike-1")$raster)
-newRaster <- adjustcolor(raster, alpha=.3)
-dim(newRaster) <- dim(raster)
-grid.edit("graphics-plot-2-spike-1", raster=as.raster(newRaster))
+adjustAlpha <- function(grob) {
+    raster <- as.matrix(grid.get(grob)$raster)
+    newRaster <- adjustcolor(raster, alpha=.3)
+    dim(newRaster) <- dim(raster)
+    grid.edit(grob, raster=as.raster(newRaster))
+}
+adjustAlpha("graphics-plot-1-spike-1")
+adjustAlpha("graphics-plot-2-spike-1")
   end.rcode-->
 <!--begin.rcode echo=FALSE, fig.keep="last"
 <<chromatograms>>
@@ -358,10 +365,8 @@ filter <- feComponentTransfer(transfers=list(A=reduceAlpha))
     as an SVG file (which is shown below the code).
   </p>
 <!--begin.rcode filter, eval=FALSE
-grid.filter("graphics-plot-1-spike-1",
-            filterEffect(filter))
-grid.filter("graphics-plot-2-spike-1",
-            filterEffect(filter))
+grid.filter("graphics-plot-1-spike-1", filterEffect(filter))
+grid.filter("graphics-plot-2-spike-1", filterEffect(filter))
 grid.export("chromatograms.svg")    
   end.rcode-->
 <!--begin.rcode echo=FALSE, results="hide", message=FALSE, fig.keep="none"
@@ -412,7 +417,7 @@ image2 <- image_read(raster2)
     <p>
     We can now apply all sorts of manipulations to those 'magick' images.
     The following code composites the two images with a "blend" operator
-    so that the result is a 50/50 mix of the two images.
+    so that the result is a 50/50 mixture of the two images.
   </p>
 <!--begin.rcode compose, eval=FALSE
 image3 <- image_composite(image1, image2, operator="blend", compose_args="50")  
